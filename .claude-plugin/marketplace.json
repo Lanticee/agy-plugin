@@ -1,0 +1,17 @@
+{
+  "name": "agy-plugin",
+  "owner": {
+    "name": "cmuhshare"
+  },
+  "description": "Claude Code plugins for collaborating with Google Antigravity CLI (agy) and Gemini models",
+  "plugins": [
+    {
+      "name": "agy-cli",
+      "source": "./",
+      "description": "Delegate tasks to Google Antigravity CLI (agy) with Gemini models",
+      "license": "MIT",
+      "keywords": ["antigravity", "agy", "gemini", "multi-model", "code-review"],
+      "category": "productivity"
+    }
+  ]
+}
