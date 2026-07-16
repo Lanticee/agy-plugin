@@ -11,13 +11,14 @@ Run the user's request through the Antigravity CLI in non-interactive print mode
 
 ## How to invoke
 
-Use the Bash tool. The default model is Gemini 3.5 Flash; override with the model the user names.
+Use the Bash tool. The default model is Gemini 3.5 Flash (Medium); override with the model the user names.
 
 ```bash
-agy --print "<prompt>" --model gemini-3.5-flash --print-timeout 5m < /dev/null
+agy --print "<prompt>" --model "Gemini 3.5 Flash (Medium)" --print-timeout 5m < /dev/null
 ```
 
 Notes:
+- `--model` takes the model's **full display name including the reasoning-effort suffix**, quoted — e.g. `"Gemini 3.5 Flash (High)"`, `"Gemini 3.1 Pro (Low)"`, `"Claude Sonnet 4.6 (Thinking)"`. Short ids like `gemini-3.5-flash` are rejected. If a name is wrong agy exits 1 and prints the valid list.
 - **CRITICAL: always redirect stdin from /dev/null** (`< /dev/null` in bash, `< NUL` via cmd). Without it, agy hangs forever waiting on stdin when run from a non-TTY.
 - `--print` runs a single prompt non-interactively and prints the response to stdout.
 - agy runs in the current working directory and can read the codebase itself; you usually do NOT need to paste file contents into the prompt — just reference paths.

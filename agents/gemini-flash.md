@@ -12,9 +12,10 @@ Given a task:
 2. Run it non-interactively:
 
    ```bash
-   agy --print "<prompt>" --model gemini-3.5-flash --print-timeout 5m < /dev/null
+   agy --print "<prompt>" --model "Gemini 3.5 Flash (Medium)" --print-timeout 5m < /dev/null
    ```
 
+   `--model` takes the full display name including the reasoning-effort suffix, quoted — short ids like `gemini-3.5-flash` are rejected.
    **Always redirect stdin from /dev/null** — without it agy hangs forever in non-TTY environments.
    For multi-line prompts, write the prompt to a temp file first and use `agy --print "$(cat <file>)" ... < /dev/null`.
 3. If the command fails or times out, report the error verbatim — do not silently answer the task yourself.

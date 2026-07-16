@@ -8,7 +8,7 @@ A [Claude Code](https://claude.com/claude-code) plugin that lets Claude collabor
 
 - **`/agy` slash command** — manually send any prompt to Gemini 3.5 Flash (`/agy review src/foo.ts for concurrency bugs`)
 - **`gemini-flash` subagent** — Claude automatically delegates self-contained subtasks (reviews, analysis, second opinions) to Gemini during coding and brings the results back
-- **Model override** — defaults to `gemini-3.5-flash`; ask for any model `agy models` supports
+- **Model override** — defaults to `Gemini 3.5 Flash (Medium)`; ask for any model `agy models` supports
 - Works in Claude Code's sandboxed shell — no special permissions needed beyond running `agy`
 
 ## How it works
@@ -16,8 +16,10 @@ A [Claude Code](https://claude.com/claude-code) plugin that lets Claude collabor
 Both the skill and the subagent shell out to agy's non-interactive print mode:
 
 ```bash
-agy --print "<prompt>" --model gemini-3.5-flash --print-timeout 5m < /dev/null
+agy --print "<prompt>" --model "Gemini 3.5 Flash (Medium)" --print-timeout 5m < /dev/null
 ```
+
+`--model` expects the model's full display name including the reasoning-effort suffix, quoted — `"Gemini 3.5 Flash (High)"`, `"Gemini 3.1 Pro (Low)"`, `"Claude Sonnet 4.6 (Thinking)"`. Short ids like `gemini-3.5-flash` are rejected with exit 1 and a list of valid names.
 
 Since `agy` runs in your project's working directory, Gemini can read the codebase itself — Claude passes file paths, not file contents.
 
