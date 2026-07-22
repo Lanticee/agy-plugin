@@ -1,6 +1,6 @@
 {
   "name": "agy-cli",
-  "description": "Delegate tasks to Google Antigravity CLI (agy) — second opinions, parallel code review, or analysis subtasks on Gemini models like Gemini 3.5 Flash",
+  "description": "Delegate tasks to Google Antigravity CLI (agy) — second opinions, parallel code review, or analysis subtasks on Gemini models like Gemini 3.6 Flash",
   "author": {
     "name": "cmuhshare"
   },
