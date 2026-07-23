@@ -21,7 +21,7 @@ agy --print "<prompt>" --model "Gemini 3.6 Flash (Medium)" --print-timeout 5m < 
 
 `--model` accepts either the full display name with reasoning-effort suffix, quoted (`"Gemini 3.6 Flash (Medium)"`, `"Gemini 3.1 Pro (Low)"`), or a short id from `agy models` (`gemini-3.6-flash-medium`). An invalid name exits 1 and prints the valid list.
 
-Since `agy` runs in your project's working directory, Gemini can read the codebase itself — Claude passes file paths, not file contents.
+In `--print` (headless) mode, agy auto-denies its own file-read tools — permission prompts need a TTY it doesn't have. The plugin therefore has Claude read the referenced files and embed their contents into the prompt, rather than passing bare paths. This works well for review/analysis of a few files; tasks that need agy itself to roam or edit the codebase don't fit headless mode.
 
 > [!IMPORTANT]
 > The `< /dev/null` stdin redirect (or `< NUL` on cmd) is **required**. `agy` hangs forever when run from a non-TTY environment with an open stdin pipe. This plugin's instructions handle it automatically.

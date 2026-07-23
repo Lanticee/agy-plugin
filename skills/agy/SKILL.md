@@ -21,7 +21,7 @@ Notes:
 - `--model` accepts either the full display name with reasoning-effort suffix, quoted (e.g. `"Gemini 3.6 Flash (Medium)"`, `"Gemini 3.1 Pro (Low)"`), or the short id listed by `agy models` (e.g. `gemini-3.6-flash-medium`). If a name is wrong agy exits 1 and prints the valid list.
 - **CRITICAL: always redirect stdin from /dev/null** (`< /dev/null` in bash, `< NUL` via cmd). Without it, agy hangs forever waiting on stdin when run from a non-TTY.
 - `--print` runs a single prompt non-interactively and prints the response to stdout.
-- agy runs in the current working directory and can read the codebase itself; you usually do NOT need to paste file contents into the prompt — just reference paths.
+- **In `--print` mode agy auto-denies its own file-read tools** (permission prompts need a TTY). Read the referenced files yourself and embed the relevant contents/excerpts in the prompt instead of passing bare paths. If the content is too large to embed, tell the user the task doesn't fit headless agy.
 - If the task needs agy to edit files or run commands, permission prompts cannot be answered in print mode. Ask the user first, then add `--dangerously-skip-permissions` only with their explicit consent. Prefer read-only/analysis tasks otherwise.
 - For long tasks raise `--print-timeout` (e.g. `10m`).
 - To continue agy's previous conversation add `--continue`.
