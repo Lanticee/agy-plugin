@@ -6,12 +6,13 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseArgs, splitRawArgumentString } from "./lib/args.mjs";
-import { DEFAULT_MODEL, DEFAULT_PRINT_TIMEOUT, killProcessTree, runAgy } from "./lib/agy.mjs";
+import { DEFAULT_MODEL, DEFAULT_PRINT_TIMEOUT, extractConversationId, killProcessTree, runAgy } from "./lib/agy.mjs";
 import { collectReviewContext, resolveReviewTarget, resolveWorkspaceRoot } from "./lib/git.mjs";
 import {
   buildStatusSnapshot,
   resolveCancelableJob,
   resolveResultJob,
+  resolveResumeConversation,
   resolveStatusJob
 } from "./lib/jobs.mjs";
 import { interpolate, loadTemplate } from "./lib/prompts.mjs";
@@ -31,6 +32,8 @@ const PLUGIN_ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const INLINE_GUIDANCE = "Use the repository context below as primary evidence.";
 const SELF_COLLECT_GUIDANCE =
   "The repository context below is a lightweight summary. Open the listed changed files with your read tools and inspect them before finalizing findings.";
+const TASK_PREAMBLE =
+  "You are assisting from a non-interactive CLI. You may read files in the added directories with your read-only tools, but you cannot edit files or run commands. If the task would require edits, describe the exact changes instead of attempting them.";
 
 function printUsage() {
   console.log(
@@ -38,6 +41,7 @@ function printUsage() {
       "Usage:",
       '  node scripts/agy-companion.mjs review "[--base <ref>] [--scope auto|working-tree|branch] [--model <name>] [--timeout <dur>]"',
       '  node scripts/agy-companion.mjs adversarial-review "[same flags] [focus text]"',
+      '  node scripts/agy-companion.mjs task "[--model <name>] [--timeout <dur>] [--resume | --conversation <id>] <prompt>"',
       '  node scripts/agy-companion.mjs status "[job-id] [--all]"',
       '  node scripts/agy-companion.mjs result "[job-id]"',
       '  node scripts/agy-companion.mjs cancel "[job-id]"'
@@ -72,35 +76,22 @@ function currentJob(workspaceRoot, jobId) {
   return listJobs(workspaceRoot).find((job) => job.id === jobId) ?? null;
 }
 
-async function runReviewJob(kind, rawArgs) {
-  const { flags, text } = parseArgs(splitRawArgumentString(rawArgs));
-  const workspaceRoot = resolveWorkspaceRoot(process.cwd());
-  const target = resolveReviewTarget(workspaceRoot, { base: flags.base, scope: flags.scope });
-  const context = collectReviewContext(workspaceRoot, target);
-  const model = flags.model ?? DEFAULT_MODEL;
-  const printTimeout = flags.timeout ?? DEFAULT_PRINT_TIMEOUT;
-  const focus = kind === "adversarial-review" ? text : "";
-
-  const templateName = kind === "adversarial-review" ? "adversarial-review" : "review";
-  const vars = {
-    TARGET_LABEL: target.label,
-    REVIEW_INPUT: context.content,
-    COLLECTION_GUIDANCE: context.inputMode === "inline-diff" ? INLINE_GUIDANCE : SELF_COLLECT_GUIDANCE
-  };
-  if (kind === "adversarial-review") {
-    vars.USER_FOCUS = focus || "(none — general adversarial review)";
+function readConversationId(agyLogFile) {
+  try {
+    return extractConversationId(fs.readFileSync(agyLogFile, "utf8"));
+  } catch {
+    return null;
   }
-  const prompt = interpolate(loadTemplate(PLUGIN_ROOT, templateName), vars);
+}
 
-  const jobId = generateJobId(kind === "adversarial-review" ? "adv" : "rev");
+async function executeJob({ workspaceRoot, jobId, kind, prompt, model, printTimeout, conversationId, jobFields = {} }) {
   const logFile = resolveJobLogFile(workspaceRoot, jobId);
-  const startedAt = new Date().toISOString();
-
+  const agyLogFile = resolveJobFile(workspaceRoot, jobId).replace(/\.json$/, ".agy.log");
   // Windows caps a spawned process's argv around 32KB, so the assembled prompt
-  // (which embeds the diff) goes into a file that plan-mode agy reads itself.
+  // goes into a file that plan-mode agy reads itself.
   const promptFile = resolveJobFile(workspaceRoot, jobId).replace(/\.json$/, ".prompt.md");
   fs.writeFileSync(promptFile, prompt, "utf8");
-  const pointerPrompt = `Read the file at ${promptFile} and follow the instructions in it exactly. That file contains your full review task, output contract, and repository context.`;
+  const pointerPrompt = `Read the file at ${promptFile} and follow the instructions in it exactly. That file contains your full task, output expectations, and context.`;
 
   upsertJob(workspaceRoot, {
     id: jobId,
@@ -108,15 +99,14 @@ async function runReviewJob(kind, rawArgs) {
     status: "running",
     pid: process.pid,
     model,
-    targetLabel: target.label,
-    focus: focus || undefined,
     cwd: workspaceRoot,
     logFile,
     promptFile,
-    startedAt
+    agyLogFile,
+    startedAt: new Date().toISOString(),
+    ...jobFields
   });
-  appendLog(logFile, `job ${jobId} started: ${kind}, ${target.label}, model ${model}`);
-  appendLog(logFile, context.summary);
+  appendLog(logFile, `job ${jobId} started: ${kind}, model ${model}`);
 
   let result;
   try {
@@ -125,6 +115,8 @@ async function runReviewJob(kind, rawArgs) {
       addDirs: [workspaceRoot, path.dirname(promptFile)],
       model,
       printTimeout,
+      logFile: agyLogFile,
+      conversationId,
       onSpawn: (child) => {
         upsertJob(workspaceRoot, { id: jobId, agyPid: child.pid });
         appendLog(logFile, `agy started (pid ${child.pid})`);
@@ -146,11 +138,12 @@ async function runReviewJob(kind, rawArgs) {
   }
 
   const completedAt = new Date().toISOString();
+  const recordedConversationId = readConversationId(agyLogFile) ?? conversationId ?? undefined;
   writeJobFile(workspaceRoot, jobId, { output: result.stdout, stderr: result.stderr, exitStatus: result.status });
 
   if (result.status === 0) {
     const summary = extractSummary(result.stdout);
-    upsertJob(workspaceRoot, { id: jobId, status: "completed", completedAt, summary });
+    upsertJob(workspaceRoot, { id: jobId, status: "completed", completedAt, summary, conversationId: recordedConversationId });
     appendLog(logFile, `completed: ${summary ?? "(no summary)"}`);
     const job = currentJob(workspaceRoot, jobId);
     console.log(`${renderJobHeader(job)}\n`);
@@ -161,7 +154,7 @@ async function runReviewJob(kind, rawArgs) {
   const failureNote = result.killed
     ? `agy exceeded the ${printTimeout} timeout and was terminated`
     : `agy exited with status ${result.status}`;
-  upsertJob(workspaceRoot, { id: jobId, status: "failed", completedAt, summary: failureNote });
+  upsertJob(workspaceRoot, { id: jobId, status: "failed", completedAt, summary: failureNote, conversationId: recordedConversationId });
   appendLog(logFile, `failed: ${failureNote}`);
   const job = currentJob(workspaceRoot, jobId);
   console.log(`${renderJobHeader(job)}\n`);
@@ -173,6 +166,55 @@ async function runReviewJob(kind, rawArgs) {
     console.log(`\npartial output:\n${result.stdout.trimEnd()}`);
   }
   return 1;
+}
+
+async function runReviewJob(kind, rawArgs) {
+  const { flags, text } = parseArgs(splitRawArgumentString(rawArgs));
+  const workspaceRoot = resolveWorkspaceRoot(process.cwd());
+  const target = resolveReviewTarget(workspaceRoot, { base: flags.base, scope: flags.scope });
+  const context = collectReviewContext(workspaceRoot, target);
+  const model = flags.model ?? DEFAULT_MODEL;
+  const focus = kind === "adversarial-review" ? text : "";
+
+  const templateName = kind === "adversarial-review" ? "adversarial-review" : "review";
+  const vars = {
+    TARGET_LABEL: target.label,
+    REVIEW_INPUT: context.content,
+    COLLECTION_GUIDANCE: context.inputMode === "inline-diff" ? INLINE_GUIDANCE : SELF_COLLECT_GUIDANCE
+  };
+  if (kind === "adversarial-review") {
+    vars.USER_FOCUS = focus || "(none — general adversarial review)";
+  }
+
+  return executeJob({
+    workspaceRoot,
+    jobId: generateJobId(kind === "adversarial-review" ? "adv" : "rev"),
+    kind,
+    prompt: interpolate(loadTemplate(PLUGIN_ROOT, templateName), vars),
+    model,
+    printTimeout: flags.timeout ?? DEFAULT_PRINT_TIMEOUT,
+    jobFields: { targetLabel: target.label, focus: focus || undefined }
+  });
+}
+
+async function runTaskJob(rawArgs) {
+  const { flags, text } = parseArgs(splitRawArgumentString(rawArgs));
+  if (!text.trim()) {
+    throw new Error("task requires a prompt. Usage: task [--resume|--conversation <id>] [--model <name>] <prompt>");
+  }
+  const workspaceRoot = resolveWorkspaceRoot(process.cwd());
+  const conversationId = flags.conversation ?? (flags.resume ? resolveResumeConversation(workspaceRoot) : undefined);
+
+  return executeJob({
+    workspaceRoot,
+    jobId: generateJobId("task"),
+    kind: "task",
+    prompt: `${TASK_PREAMBLE}\n\nWorking directory: ${workspaceRoot}\n\nTask:\n${text.trim()}\n`,
+    model: flags.model ?? DEFAULT_MODEL,
+    printTimeout: flags.timeout ?? DEFAULT_PRINT_TIMEOUT,
+    conversationId,
+    jobFields: {}
+  });
 }
 
 function runStatus(rawArgs) {
@@ -228,6 +270,9 @@ async function main() {
       case "review":
       case "adversarial-review":
         process.exitCode = await runReviewJob(subcommand, rawArgs);
+        return;
+      case "task":
+        process.exitCode = await runTaskJob(rawArgs);
         return;
       case "status":
         process.exitCode = runStatus(rawArgs);

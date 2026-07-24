@@ -30,6 +30,9 @@ export function renderStatusReport(snapshot) {
 }
 
 export function renderJobHeader(job) {
+  if (job.kind === "task") {
+    return `Gemini task via agy (${job.model ?? "default model"}) [job ${job.id}]`;
+  }
   const label = job.kind === "adversarial-review" ? "Gemini adversarial review via agy" : "Gemini review via agy";
   const focus = job.focus ? `, focus: ${job.focus}` : "";
   return `${label} (${job.model ?? "default model"}), target: ${job.targetLabel ?? "unknown"}${focus} [job ${job.id}]`;
@@ -48,6 +51,9 @@ export function renderJobResult(job, payload) {
   }
   if (payload?.output?.trim()) {
     lines.push(payload.output.trimEnd());
+  }
+  if (job.conversationId) {
+    lines.push("", `Continue this conversation in agy: \`agy --conversation ${job.conversationId} -i\` (or \`/agy-cli:task --resume <follow-up>\`).`);
   }
   return lines.join("\n");
 }

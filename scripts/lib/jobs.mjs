@@ -87,6 +87,15 @@ export function resolveResultJob(cwd, reference) {
   throw new Error("No finished agy jobs found for this repository yet.");
 }
 
+export function resolveResumeConversation(cwd) {
+  const workspaceRoot = resolveWorkspaceRoot(cwd);
+  const withConversation = sortJobsNewestFirst(listJobs(workspaceRoot)).find((job) => job.conversationId);
+  if (!withConversation) {
+    throw new Error("No prior agy conversation found for this repository. Run a task or review first, or pass --conversation <id>.");
+  }
+  return withConversation.conversationId;
+}
+
 export function resolveCancelableJob(cwd, reference) {
   const workspaceRoot = resolveWorkspaceRoot(cwd);
   const activeJobs = sortJobsNewestFirst(listJobs(workspaceRoot)).filter((job) => job.status === "running");

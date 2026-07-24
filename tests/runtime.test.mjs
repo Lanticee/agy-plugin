@@ -133,6 +133,68 @@ test("failed agy runs are recorded as failed and surface stderr", async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("task delegates a prompt, records kind task and a conversation id", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const task = runCompanion(repo, dataDir, ["task", "summarize the repo layout"]);
+  assert.equal(task.status, 0, task.stderr);
+  assert.match(task.stdout, /Gemini task via agy/);
+  assert.match(task.stdout, /## Verdict|approve/);
+
+  const jobs = await loadJobs(repo, dataDir);
+  assert.equal(jobs[0].kind, "task");
+  assert.equal(jobs[0].status, "completed");
+  assert.equal(jobs[0].conversationId, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test("task --resume reuses the newest stored conversation id", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const first = runCompanion(repo, dataDir, ["task", "first task"]);
+  assert.equal(first.status, 0, first.stderr);
+
+  const argsFile = path.join(dataDir, "resume-args.json");
+  const second = runCompanion(repo, dataDir, ["task", "--resume follow up on that"], { FAKE_AGY_ARGS_FILE: argsFile });
+  assert.equal(second.status, 0, second.stderr);
+  const args = JSON.parse(fs.readFileSync(argsFile, "utf8"));
+  const index = args.indexOf("--conversation");
+  assert.notEqual(index, -1, "expected --conversation to be passed");
+  assert.equal(args[index + 1], "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test("task --resume with no prior conversation fails cleanly", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const task = runCompanion(repo, dataDir, ["task", "--resume anything"]);
+  assert.notEqual(task.status, 0);
+  assert.match(task.stderr + task.stdout, /no prior/i);
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test("review jobs also record a conversation id", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const review = runCompanion(repo, dataDir, ["review", ""]);
+  assert.equal(review.status, 0, review.stderr);
+  const jobs = await loadJobs(repo, dataDir);
+  assert.equal(jobs[0].conversationId, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("cancel kills a running job and the runner does not overwrite the cancelled state", async () => {
   const repo = makeRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
