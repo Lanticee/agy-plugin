@@ -1,70 +1,50 @@
 ---
 description: Run a Gemini code review (via agy) against local git state
-argument-hint: '[--base <ref>] [--scope auto|working-tree|branch] [--model <name>]'
+argument-hint: '[--wait|--background] [--base <ref>] [--scope auto|working-tree|branch] [--model <name>]'
 disable-model-invocation: true
-allowed-tools: Read, Glob, Grep, Bash, Write
+allowed-tools: Read, Glob, Grep, Bash(node:*), Bash(git:*), AskUserQuestion
 ---
 
-Run a Gemini code review through the Antigravity CLI.
+Run a Gemini code review through the agy companion runtime.
 
 Raw slash-command arguments:
 `$ARGUMENTS`
 
 Core constraints:
 - This command is review-only. Do not fix issues, apply patches, or offer to make changes.
-- Your only job is to run the review and return Gemini's output verbatim to the user.
+- Your only job is to run the review and return the command output verbatim to the user.
 - Never use `--dangerously-skip-permissions`.
 
-## 1. Resolve the review target
+Execution mode rules:
+- If the raw arguments include `--wait`, do not ask. Run the review in the foreground.
+- If the raw arguments include `--background`, do not ask. Run the review in a background task.
+- Otherwise, estimate the review size first:
+  - For working-tree review, check `git status --short --untracked-files=all` and `git diff --shortstat` / `git diff --shortstat --cached`.
+  - For base-branch review, check `git diff --shortstat <base>...HEAD`.
+  - If there is clearly nothing to review, tell the user and stop.
+  - Recommend waiting only for tiny reviews (roughly 1-2 files); otherwise recommend background.
+  - Then use `AskUserQuestion` exactly once with two options, recommended first with `(Recommended)` suffix: `Wait for results` / `Run in background`.
 
-- If `$ARGUMENTS` contains `--base <ref>`: branch review against `<ref>`. Target label: `branch diff against <ref>`.
-- Else if `--scope working-tree`: working-tree review. Target label: `working tree diff`.
-- Else if `--scope branch`: detect the default branch (`git symbolic-ref refs/remotes/origin/HEAD`, falling back to `main`/`master`) and do a branch review against it.
-- Else (auto): run `git status --short --untracked-files=all`. If the working tree is dirty (any staged, unstaged, or untracked entries), review the working tree; otherwise do a branch review against the detected default branch.
-- If there is nothing to review (clean tree AND empty branch diff), tell the user and stop.
+Argument handling:
+- Strip `--wait`/`--background` before forwarding; pass everything else through to the companion verbatim.
+- The companion parses `--base`, `--scope`, `--model`, and `--timeout` itself. Do not rewrite them.
+- `/agy-cli:review` takes no focus text. For custom focus or adversarial framing, use `/agy-cli:adversarial-review`.
 
-## 2. Collect the repository context
-
-All git commands run from the repo root (`git rev-parse --show-toplevel`).
-
-For a working-tree review, capture:
-- `git status --short --untracked-files=all` (section "Git Status")
-- `git diff --cached --no-ext-diff` (section "Staged Diff")
-- `git diff --no-ext-diff` (section "Unstaged Diff")
-- untracked files: inline each text file under 24KB in a fenced block (section "Untracked Files"); note skipped binaries/oversized files.
-
-For a branch review against `<base>`, capture:
-- `git log --oneline --decorate <base>..HEAD` (section "Commit Log")
-- `git diff --stat <base>...HEAD` (section "Diff Stat")
-- `git diff --no-ext-diff <base>...HEAD` (section "Branch Diff")
-
-Size rule: if the combined diff exceeds ~200KB, do NOT inline the full diff. Instead include only the status/log, `--stat` output, and the changed-file list, and set the collection guidance below to the self-collect variant.
-
-## 3. Assemble the prompt
-
-Read the template at `${CLAUDE_PLUGIN_ROOT}/prompts/review.md` and replace:
-- `{{TARGET_LABEL}}` → the target label from step 1
-- `{{REVIEW_INPUT}}` → the sections from step 2, each formatted as `## <Section>` followed by its content
-- `{{COLLECTION_GUIDANCE}}` →
-  - inline diff: `Use the repository context below as primary evidence.`
-  - self-collect: `The repository context below is a lightweight summary. Open the listed changed files with your read tools and inspect them before finalizing findings.`
-
-Write the assembled prompt to a temp file (e.g. under the session scratchpad or `$TMPDIR`).
-
-## 4. Run agy
-
-Model: `"Gemini 3.6 Flash (Medium)"` unless the user passed `--model <name>` (pass their value through verbatim).
-
+Foreground flow:
+- Run:
 ```bash
-agy --print "$(cat <temp-prompt-file>)" --add-dir "<repo root>" \
-  --mode plan --model "Gemini 3.6 Flash (Medium)" --print-timeout 10m < /dev/null
+node "${CLAUDE_PLUGIN_ROOT}/scripts/agy-companion.mjs" review "$ARGUMENTS"
 ```
+- Return the command stdout verbatim, exactly as-is. Do not paraphrase, summarize, or add commentary.
 
-- The `< /dev/null` stdin redirect is mandatory — agy hangs forever without it on a non-TTY.
-- `--mode plan` lets agy read files itself (read-only tools auto-approved); `--add-dir` scopes it to the repo.
-- If agy exits non-zero or times out, report the error verbatim; do not review the code yourself.
-
-## 5. Return the result
-
-Return agy's stdout verbatim, prefixed with one line: `Gemini review via agy (<model>), target: <target label>`.
-Do not paraphrase, summarize, filter, or add commentary. Do not fix any issues mentioned in the review.
+Background flow:
+- Launch with `Bash` in the background:
+```typescript
+Bash({
+  command: `node "${CLAUDE_PLUGIN_ROOT}/scripts/agy-companion.mjs" review "$ARGUMENTS"`,
+  description: "agy review",
+  run_in_background: true
+})
+```
+- Do not wait for completion in this turn.
+- After launching, tell the user: "Gemini review started in the background. Check `/agy-cli:status` for progress and `/agy-cli:result` when it finishes."
