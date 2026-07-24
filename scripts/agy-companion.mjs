@@ -17,10 +17,13 @@ import {
 import { collectReviewContext, resolveReviewTarget, resolveWorkspaceRoot } from "./lib/git.mjs";
 import {
   buildStatusSnapshot,
+  readJobProgress,
+  reapOrphanJobs,
   resolveCancelableJob,
   resolveResultJob,
   resolveResumeConversation,
-  resolveStatusJob
+  resolveStatusJob,
+  waitForJob
 } from "./lib/jobs.mjs";
 import { interpolate, loadTemplate } from "./lib/prompts.mjs";
 import {
@@ -58,7 +61,7 @@ function printUsage() {
       '  node scripts/agy-companion.mjs review "[--base <ref>] [--scope auto|working-tree|branch] [--model <name>] [--timeout <dur>]"',
       '  node scripts/agy-companion.mjs adversarial-review "[same flags] [focus text]"',
       '  node scripts/agy-companion.mjs task "[--model <name>] [--timeout <dur>] [--resume | --conversation <id>] <prompt>"',
-      '  node scripts/agy-companion.mjs status "[job-id] [--all]"',
+      '  node scripts/agy-companion.mjs status "[job-id] [--all] [--wait] [--timeout-ms <ms>]"',
       '  node scripts/agy-companion.mjs result "[job-id]"',
       '  node scripts/agy-companion.mjs cancel "[job-id]"',
       '  node scripts/agy-companion.mjs setup "[--enable-review-gate|--disable-review-gate]"'
@@ -234,12 +237,42 @@ async function runTaskJob(rawArgs) {
   });
 }
 
-function runStatus(rawArgs) {
+async function runStatus(rawArgs) {
   const { flags, text } = parseArgs(splitRawArgumentString(rawArgs));
   const reference = text.split(/\s+/).filter(Boolean)[0] ?? null;
 
+  reapOrphanJobs(process.cwd());
+
+  if (flags.wait) {
+    const timeoutMs = flags["timeout-ms"] ? Number(flags["timeout-ms"]) : undefined;
+    const { job, timedOut } = await waitForJob(process.cwd(), reference, { timeoutMs });
+    if (timedOut) {
+      console.log(`Job ${job.id} is still running after the wait timeout.\n`);
+      console.log(renderStatusReport(buildStatusSnapshot(process.cwd(), { all: Boolean(flags.all) })));
+      return 1;
+    }
+    const workspaceRoot = resolveWorkspaceRoot(process.cwd());
+    const jobFile = resolveJobFile(workspaceRoot, job.id);
+    const payload = fs.existsSync(jobFile) ? readJobFile(jobFile) : null;
+    console.log(renderJobResult(job, payload ?? {}));
+    return job.status === "failed" ? 1 : 0;
+  }
+
   if (reference) {
     const { workspaceRoot, job } = resolveStatusJob(process.cwd(), reference);
+    if (job.status === "running") {
+      const progress = readJobProgress(job);
+      const lines = [
+        `${renderJobHeader(job)}`,
+        "",
+        `Status: running (${progress.phase})`,
+        ...progress.lines.map((line) => `- ${line}`),
+        "",
+        `Wait for it with \`/agy-cli:status ${job.id} --wait\`, or cancel with \`/agy-cli:cancel ${job.id}\`.`
+      ];
+      console.log(lines.join("\n"));
+      return 0;
+    }
     const jobFile = resolveJobFile(workspaceRoot, job.id);
     const payload = fs.existsSync(jobFile) ? readJobFile(jobFile) : null;
     console.log(renderJobResult(job, payload ?? {}));
@@ -322,7 +355,7 @@ async function main() {
         process.exitCode = await runTaskJob(rawArgs);
         return;
       case "status":
-        process.exitCode = runStatus(rawArgs);
+        process.exitCode = await runStatus(rawArgs);
         return;
       case "result":
         process.exitCode = runResult(rawArgs);

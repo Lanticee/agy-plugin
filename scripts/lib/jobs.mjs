@@ -1,4 +1,6 @@
-import { listJobs } from "./state.mjs";
+import fs from "node:fs";
+
+import { listJobs, upsertJob } from "./state.mjs";
 import { resolveWorkspaceRoot } from "./git.mjs";
 
 const DEFAULT_MAX_STATUS_JOBS = 8;
@@ -53,7 +55,9 @@ export function buildStatusSnapshot(cwd, options = {}) {
   const jobs = sortJobsNewestFirst(listJobs(workspaceRoot));
   const maxJobs = options.maxJobs ?? DEFAULT_MAX_STATUS_JOBS;
 
-  const running = jobs.filter((job) => job.status === "running");
+  const running = jobs
+    .filter((job) => job.status === "running")
+    .map((job) => ({ ...job, phase: readJobProgress(job).phase }));
   const finished = jobs.filter((job) => job.status !== "running");
   const recent = options.all ? finished : finished.slice(0, maxJobs);
 
@@ -85,6 +89,103 @@ export function resolveResultJob(cwd, reference) {
     throw new Error(`No job found for "${reference}". Run /agy-cli:status to list known jobs.`);
   }
   throw new Error("No finished agy jobs found for this repository yet.");
+}
+
+export function isPidAlive(pid) {
+  if (!pid) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists but we lack permission to signal it.
+    return error?.code === "EPERM";
+  }
+}
+
+export function reapOrphanJobs(cwd) {
+  const workspaceRoot = resolveWorkspaceRoot(cwd);
+  const reaped = [];
+  for (const job of listJobs(workspaceRoot)) {
+    if (job.status === "running" && !isPidAlive(job.pid)) {
+      upsertJob(workspaceRoot, {
+        id: job.id,
+        status: "failed",
+        completedAt: new Date().toISOString(),
+        summary: "orphaned — process no longer running"
+      });
+      reaped.push(job.id);
+    }
+  }
+  return reaped;
+}
+
+const PROGRESS_MILESTONES = [
+  { pattern: /Print mode: starting/, label: "agy started", phase: "starting" },
+  { pattern: /Created conversation|Starting new conversation/, label: "conversation created", phase: "starting" },
+  { pattern: /Sending user message/, label: "prompt sent to Gemini", phase: "generating" },
+  { pattern: /Streaming conversation/, label: "Gemini responding", phase: "generating" },
+  { pattern: /Stream completed/, label: "response complete", phase: "finalizing" }
+];
+
+export function readJobProgress(job) {
+  const fallback = { phase: "starting", lines: [] };
+  if (!job?.agyLogFile) {
+    return fallback;
+  }
+  let text;
+  try {
+    text = fs.readFileSync(job.agyLogFile, "utf8");
+  } catch {
+    return fallback;
+  }
+
+  let phase = "starting";
+  const lines = [];
+  for (const line of text.split(/\r?\n/)) {
+    for (const milestone of PROGRESS_MILESTONES) {
+      if (milestone.pattern.test(line)) {
+        phase = milestone.phase;
+        if (lines[lines.length - 1] !== milestone.label) {
+          lines.push(milestone.label);
+        }
+        break;
+      }
+    }
+  }
+  return { phase, lines: lines.slice(-4) };
+}
+
+export async function waitForJob(cwd, reference, options = {}) {
+  const workspaceRoot = resolveWorkspaceRoot(cwd);
+  const timeoutMs = options.timeoutMs ?? 240000;
+  const pollMs = options.pollMs ?? 2000;
+  const deadline = Date.now() + timeoutMs;
+
+  const findTarget = () => {
+    const jobs = sortJobsNewestFirst(listJobs(workspaceRoot));
+    if (reference) {
+      return matchJobReference(jobs, reference);
+    }
+    return jobs.find((job) => job.status === "running") ?? jobs[0] ?? null;
+  };
+
+  let target = findTarget();
+  if (!target) {
+    throw new Error(reference ? `No job found for "${reference}".` : "No agy jobs recorded for this repository yet.");
+  }
+
+  while (true) {
+    const current = sortJobsNewestFirst(listJobs(workspaceRoot)).find((job) => job.id === target.id) ?? target;
+    if (current.status !== "running") {
+      return { job: current, timedOut: false };
+    }
+    if (Date.now() >= deadline) {
+      return { job: current, timedOut: true };
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
 }
 
 export function resolveResumeConversation(cwd) {

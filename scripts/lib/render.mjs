@@ -5,10 +5,8 @@ function jobLine(job) {
     job.status === "running"
       ? formatElapsed(job.startedAt ?? job.createdAt)
       : formatElapsed(job.startedAt ?? job.createdAt, job.completedAt ?? job.updatedAt);
-  const parts = [
-    `| ${job.id} | ${job.kind ?? "job"} | ${job.status} | ${elapsed ?? "-"} | ${job.targetLabel ?? "-"} | ${job.summary ?? "-"} |`
-  ];
-  return parts.join("");
+  const status = job.status === "running" && job.phase ? `running (${job.phase})` : job.status;
+  return `| ${job.id} | ${job.kind ?? "job"} | ${status} | ${elapsed ?? "-"} | ${job.targetLabel ?? "-"} | ${job.summary ?? "-"} |`;
 }
 
 export function renderStatusReport(snapshot) {

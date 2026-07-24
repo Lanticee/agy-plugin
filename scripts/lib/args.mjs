@@ -1,5 +1,5 @@
 const BOOLEAN_FLAGS = new Set(["background", "wait", "all", "json", "resume", "enable-review-gate", "disable-review-gate"]);
-const VALUE_FLAGS = new Set(["base", "scope", "model", "timeout", "conversation"]);
+const VALUE_FLAGS = new Set(["base", "scope", "model", "timeout", "conversation", "timeout-ms"]);
 
 export function splitRawArgumentString(raw) {
   const tokens = [];

@@ -195,6 +195,35 @@ test("review jobs also record a conversation id", async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("status --wait blocks until a background job finishes and prints its result", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const child = spawn(process.execPath, [COMPANION, "review", ""], {
+    cwd: repo,
+    env: companionEnv(repo, dataDir, { FAKE_AGY_SLEEP_MS: "2500" }),
+    stdio: "ignore"
+  });
+
+  let jobs = [];
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    jobs = await loadJobs(repo, dataDir);
+    if (jobs.length > 0) {
+      break;
+    }
+    await sleep(100);
+  }
+  assert.ok(jobs.length > 0, "job never appeared");
+
+  const wait = runCompanion(repo, dataDir, ["status", "--wait --timeout-ms 30000"]);
+  assert.equal(wait.status, 0, wait.stderr);
+  assert.match(wait.stdout, /## Verdict/);
+
+  child.kill();
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("setup reports environment and toggles the review gate", async () => {
   const repo = makeRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
