@@ -82,8 +82,9 @@ async function main() {
     return;
   }
 
+  // Gemini sometimes wraps the verdict in backticks or bold markers — match loosely.
   const verdict = extractVerdict(review.stdout);
-  if (!verdict || !verdict.toLowerCase().startsWith("needs-attention")) {
+  if (!verdict || !/needs-attention/i.test(verdict)) {
     return;
   }
 

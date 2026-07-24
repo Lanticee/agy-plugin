@@ -79,6 +79,20 @@ test("gate enabled + needs-attention verdict: hook blocks with the review as rea
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("gate blocks on a backtick-wrapped needs-attention verdict", () => {
+  const repo = makeDirtyRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+  enableGate(repo, dataDir);
+
+  const hook = runHook(repo, dataDir, { cwd: repo }, { FAKE_AGY_VERDICT: "`needs-attention`" });
+  assert.equal(hook.status, 0, hook.stderr);
+  const payload = JSON.parse(hook.stdout);
+  assert.equal(payload.decision, "block");
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("gate enabled + approve verdict: hook does not block", () => {
   const repo = makeDirtyRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
