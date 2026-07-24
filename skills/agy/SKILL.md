@@ -7,29 +7,24 @@ allowed-tools: [Bash, Read, Glob, Grep]
 
 # Delegate to Antigravity CLI (agy)
 
-Run the user's request through the Antigravity CLI in non-interactive print mode.
+Forward the user's request to Gemini through the agy companion runtime, which handles the headless-agy pitfalls (stdin hang, argv limits, plan-mode file reading) and records every run as a resumable job.
 
 ## How to invoke
 
-Use the Bash tool. The default model is Gemini 3.6 Flash (Medium); override with the model the user names.
-
 ```bash
-agy --print "<prompt with file paths>" --add-dir "<absolute project dir>" \
-  --mode plan --model "Gemini 3.6 Flash (Medium)" --print-timeout 5m < /dev/null
+node "${CLAUDE_PLUGIN_ROOT}/scripts/agy-companion.mjs" task "<task text> [--resume] [--model <name>]"
 ```
 
 Notes:
-- `--model` accepts either the full display name with reasoning-effort suffix, quoted (e.g. `"Gemini 3.6 Flash (Medium)"`, `"Gemini 3.1 Pro (Low)"`), or the short id listed by `agy models` (e.g. `gemini-3.6-flash-medium`). If a name is wrong agy exits 1 and prints the valid list.
-- **CRITICAL: always redirect stdin from /dev/null** (`< /dev/null` in bash, `< NUL` via cmd). Without it, agy hangs forever waiting on stdin when run from a non-TTY.
-- `--print` runs a single prompt non-interactively and prints the response to stdout.
-- **`--mode plan` is what lets headless agy read files**: plan mode auto-approves read-only tools (write tools stay blocked), so agy can read referenced paths itself. Without it, `--print` mode auto-denies all tool permission prompts (they need a TTY). Scope what agy can see with `--add-dir`. If plan mode can't be used, fall back to embedding file contents in the prompt.
-- If the task needs agy to edit files or run commands, permission prompts cannot be answered in print mode. Ask the user first, then add `--dangerously-skip-permissions` only with their explicit consent. Prefer read-only/analysis tasks otherwise.
-- For long tasks raise `--print-timeout` (e.g. `10m`).
-- To continue agy's previous conversation add `--continue`.
-- List available models with `agy models` if the user asks for a different one.
+- Build a self-contained prompt from $ARGUMENTS: include absolute file paths and any context the user referenced. Gemini runs in plan mode (read-only tools auto-approved) and reads workspace files itself.
+- To continue Gemini's previous conversation in this repo, add `--resume` (or `--conversation <id>` for a specific one — IDs are shown by `/agy-cli:result`).
+- `--model` accepts the quoted display name (`"Gemini 3.6 Flash (Medium)"`, `"Gemini 3.1 Pro (Low)"`) or the short id from `agy models`. Default is Gemini 3.6 Flash (Medium).
+- For long tasks add `--timeout 20m` (companion default is 10m).
+- Tasks are read-only for Gemini: headless agy cannot answer edit/command permission prompts, and this plugin never uses `--dangerously-skip-permissions`. If the task needs edits, keep it as analysis or suggest running agy interactively.
+- Related commands: `/agy-cli:status`, `/agy-cli:result`, `/agy-cli:cancel` for background jobs; `/agy-cli:review` for code review.
 
 ## Steps
 
-1. Build a self-contained prompt from $ARGUMENTS (add any file paths or context the user referenced in the conversation).
-2. Run agy via Bash with the command above. Quote the prompt carefully; for multi-line prompts write it to a temp file and use `agy --print "$(cat <file>)"`.
-3. Relay agy's answer back to the user, clearly attributed to Antigravity/Gemini, and add your own assessment if you disagree or can verify it.
+1. Build the self-contained task text (file paths + context) from $ARGUMENTS.
+2. Run the companion `task` command above via Bash.
+3. Relay the output back to the user verbatim, clearly attributed to Antigravity/Gemini, and add your own assessment only if you disagree or can verify a claim.
