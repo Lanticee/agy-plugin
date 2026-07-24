@@ -23,7 +23,8 @@ function resolveAgyCommand() {
     }
     return { bin: parts[0], prefix: parts.slice(1) };
   }
-  return { bin: process.platform === "win32" ? "agy.exe" : "agy", prefix: [] };
+  // Plain "agy" works on Windows too: CreateProcess resolves it to agy.exe.
+  return { bin: "agy", prefix: [] };
 }
 
 export function killProcessTree(pid) {
@@ -41,14 +42,14 @@ export function killProcessTree(pid) {
   }
 }
 
-export function runAgy({ prompt, addDir, model = DEFAULT_MODEL, printTimeout = DEFAULT_PRINT_TIMEOUT, killGraceMs = 60000, onSpawn }) {
+export function runAgy({ prompt, addDir, addDirs, model = DEFAULT_MODEL, printTimeout = DEFAULT_PRINT_TIMEOUT, killGraceMs = 60000, onSpawn }) {
   const { bin, prefix } = resolveAgyCommand();
+  const dirs = addDirs ?? (addDir ? [addDir] : []);
   const args = [
     ...prefix,
     "--print",
     prompt,
-    "--add-dir",
-    addDir,
+    ...dirs.flatMap((dir) => ["--add-dir", dir]),
     "--mode",
     "plan",
     "--model",

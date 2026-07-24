@@ -96,6 +96,12 @@ async function runReviewJob(kind, rawArgs) {
   const logFile = resolveJobLogFile(workspaceRoot, jobId);
   const startedAt = new Date().toISOString();
 
+  // Windows caps a spawned process's argv around 32KB, so the assembled prompt
+  // (which embeds the diff) goes into a file that plan-mode agy reads itself.
+  const promptFile = resolveJobFile(workspaceRoot, jobId).replace(/\.json$/, ".prompt.md");
+  fs.writeFileSync(promptFile, prompt, "utf8");
+  const pointerPrompt = `Read the file at ${promptFile} and follow the instructions in it exactly. That file contains your full review task, output contract, and repository context.`;
+
   upsertJob(workspaceRoot, {
     id: jobId,
     kind,
@@ -106,14 +112,15 @@ async function runReviewJob(kind, rawArgs) {
     focus: focus || undefined,
     cwd: workspaceRoot,
     logFile,
+    promptFile,
     startedAt
   });
   appendLog(logFile, `job ${jobId} started: ${kind}, ${target.label}, model ${model}`);
   appendLog(logFile, context.summary);
 
   const result = await runAgy({
-    prompt,
-    addDir: workspaceRoot,
+    prompt: pointerPrompt,
+    addDirs: [workspaceRoot, path.dirname(promptFile)],
     model,
     printTimeout,
     onSpawn: (child) => {
@@ -203,7 +210,9 @@ function runCancel(rawArgs) {
 
 async function main() {
   const [, , subcommand, ...rest] = process.argv;
-  const rawArgs = rest.join(" ");
+  // Slash commands pass "$ARGUMENTS" as one string (inner quotes intact) — re-tokenize it.
+  // Direct shell calls arrive pre-split by the shell — re-joining would shred quoted values.
+  const rawArgs = rest.length === 1 ? rest[0] : rest.map((token) => (/\s/.test(token) ? `"${token}"` : token)).join(" ");
 
   try {
     switch (subcommand) {

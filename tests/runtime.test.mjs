@@ -104,6 +104,20 @@ test("adversarial-review passes focus text and records kind", async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("pre-split argv keeps multi-word flag values intact", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const review = runCompanion(repo, dataDir, ["review", "--model", "Fake Model Name (High)"]);
+  assert.equal(review.status, 0, review.stderr);
+
+  const jobs = await loadJobs(repo, dataDir);
+  assert.equal(jobs[0].model, "Fake Model Name (High)");
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("failed agy runs are recorded as failed and surface stderr", async () => {
   const repo = makeRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
