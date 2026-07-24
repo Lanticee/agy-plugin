@@ -18,23 +18,21 @@ A [Claude Code](https://claude.com/claude-code) plugin that lets Claude collabor
 
 ## How it works
 
-Both the skill and the subagent shell out to agy's non-interactive print mode:
+Every command, the `/agy` skill, and the `gemini-flash` subagent route through a Node.js **companion runtime** (`scripts/agy-companion.mjs`) that drives agy's non-interactive print mode and handles its headless pitfalls for you:
 
-```bash
-agy --print "<prompt with file paths>" --add-dir "<absolute project dir>" \
-  --mode plan --model "Gemini 3.6 Flash (Medium)" --print-timeout 5m < /dev/null
-```
+- **stdin hang** — agy hangs forever on an open non-TTY stdin; the companion spawns it with stdin closed.
+- **File reads** — headless agy auto-denies its own tool permission prompts, so the companion runs `--mode plan`, which auto-approves read-only tools (write tools stay blocked); `--add-dir` scopes what Gemini can see.
+- **Windows argv cap** — command lines max out around 32KB, so the assembled prompt (which can embed a whole diff) is written to a file that Gemini reads itself.
+- **Job tracking** — every run is recorded as a per-repo job (status, output, agy conversation ID), enabling background runs, `/agy-cli:status`/`result`/`cancel`, and `--resume`.
 
 `--model` accepts either the full display name with reasoning-effort suffix, quoted (`"Gemini 3.6 Flash (Medium)"`, `"Gemini 3.1 Pro (Low)"`), or a short id from `agy models` (`gemini-3.6-flash-medium`). An invalid name exits 1 and prints the valid list.
 
-In `--print` (headless) mode, agy normally auto-denies its own file-read tools — permission prompts need a TTY it doesn't have. The plugin therefore runs agy with `--mode plan`, which auto-approves read-only tools (write tools stay blocked), so Gemini can read the referenced files itself; `--add-dir` scopes what it can see. Tasks that need agy to edit files don't fit headless mode.
-
-> [!IMPORTANT]
-> The `< /dev/null` stdin redirect (or `< NUL` on cmd) is **required**. `agy` hangs forever when run from a non-TTY environment with an open stdin pipe. This plugin's instructions handle it automatically.
+Job state lives under `CLAUDE_PLUGIN_DATA` (fallback: `<tmpdir>/agy-companion`), keyed per repository, pruned to the 50 most recent jobs.
 
 ## Prerequisites
 
 - [Claude Code](https://claude.com/claude-code) installed
+- Node.js ≥ 18.18 (the companion runtime is plain Node, no dependencies)
 - [Antigravity CLI](https://antigravity.google) installed and logged in:
 
   ```powershell
@@ -154,14 +152,23 @@ agy-plugin/
 ├── prompts/
 │   ├── review.md            # review prompt template
 │   └── adversarial-review.md# adversarial review prompt template
+├── hooks/
+│   └── hooks.json           # Stop hook registration for the review gate
 ├── scripts/
-│   ├── agy-companion.mjs    # companion runtime: review execution + job tracking
+│   ├── agy-companion.mjs    # companion runtime: job execution + tracking
+│   ├── stop-review-gate-hook.mjs  # opt-in stop-time review gate (fail-open)
 │   └── lib/                 # args/state/git/prompts/agy/jobs/render modules
 ├── skills/
-│   └── agy/
-│       └── SKILL.md         # /agy slash command
+│   ├── agy/
+│   │   └── SKILL.md         # /agy slash command
+│   └── gemini-prompting/
+│       └── SKILL.md         # prompt-writing guidance for Gemini via agy
+├── tests/                   # node --test suite (fake agy, no real API calls)
+├── .github/workflows/       # CI: npm test on ubuntu + windows
 └── README.md
 ```
+
+Run the tests with `npm test` — they use a fake agy binary and never call the real API.
 
 ## Troubleshooting
 
@@ -171,6 +178,8 @@ agy-plugin/
 | `agy models` prints nothing | Known behavior in non-TTY mode (exit 0, empty output); run it in a real terminal |
 | Auth errors | Run `agy` interactively once in a terminal to sign in |
 | Gemini needs to edit files | Print mode can't answer permission prompts — keep delegated tasks read-only/analysis. Editing would require `--dangerously-skip-permissions`, which this plugin deliberately never uses |
+| Job stuck in `running` | `/agy-cli:cancel <job-id>` marks it cancelled and kills the process tree |
+| Review gate blocks repeatedly / burns quota | `/agy-cli:setup --disable-review-gate`; the gate is per-repo and off by default |
 
 ## License
 
