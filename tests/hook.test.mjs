@@ -8,6 +8,7 @@ import { test } from "node:test";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HOOK = path.resolve(HERE, "..", "scripts", "stop-review-gate-hook.mjs");
+const LIFECYCLE_HOOK = path.resolve(HERE, "..", "scripts", "session-lifecycle-hook.mjs");
 const COMPANION = path.resolve(HERE, "..", "scripts", "agy-companion.mjs");
 const FAKE_AGY = path.join(HERE, "fake-agy.mjs");
 
@@ -133,6 +134,38 @@ test("stop_hook_active short-circuits without running a review", () => {
   const hook = runHook(repo, dataDir, { cwd: repo, stop_hook_active: true }, { FAKE_AGY_VERDICT: "needs-attention" });
   assert.equal(hook.status, 0, hook.stderr);
   assert.doesNotMatch(hook.stdout, /"decision"/);
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test("session lifecycle hook reaps orphaned running jobs", async () => {
+  const repo = makeDirtyRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const previous = process.env.CLAUDE_PLUGIN_DATA;
+  process.env.CLAUDE_PLUGIN_DATA = dataDir;
+  try {
+    const { upsertJob, listJobs } = await import("../scripts/lib/state.mjs");
+    upsertJob(repo, { id: "task-orphan", kind: "task", status: "running", pid: 4000000 });
+
+    const hook = spawnSync(process.execPath, [LIFECYCLE_HOOK], {
+      cwd: repo,
+      encoding: "utf8",
+      input: JSON.stringify({ cwd: repo }),
+      env: hookEnv(dataDir)
+    });
+    assert.equal(hook.status, 0, hook.stderr);
+
+    const jobs = listJobs(repo);
+    assert.equal(jobs.find((job) => job.id === "task-orphan").status, "failed");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.CLAUDE_PLUGIN_DATA;
+    } else {
+      process.env.CLAUDE_PLUGIN_DATA = previous;
+    }
+  }
 
   fs.rmSync(repo, { recursive: true, force: true });
   fs.rmSync(dataDir, { recursive: true, force: true });
