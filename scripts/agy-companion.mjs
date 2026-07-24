@@ -6,7 +6,14 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { parseArgs, splitRawArgumentString } from "./lib/args.mjs";
-import { DEFAULT_MODEL, DEFAULT_PRINT_TIMEOUT, extractConversationId, killProcessTree, runAgy } from "./lib/agy.mjs";
+import {
+  DEFAULT_MODEL,
+  DEFAULT_PRINT_TIMEOUT,
+  checkAgyAvailable,
+  extractConversationId,
+  killProcessTree,
+  runAgy
+} from "./lib/agy.mjs";
 import { collectReviewContext, resolveReviewTarget, resolveWorkspaceRoot } from "./lib/git.mjs";
 import {
   buildStatusSnapshot,
@@ -16,16 +23,25 @@ import {
   resolveStatusJob
 } from "./lib/jobs.mjs";
 import { interpolate, loadTemplate } from "./lib/prompts.mjs";
-import { renderCancelReport, renderJobHeader, renderJobResult, renderStatusReport } from "./lib/render.mjs";
+import {
+  renderCancelReport,
+  renderJobHeader,
+  renderJobResult,
+  renderSetupReport,
+  renderStatusReport
+} from "./lib/render.mjs";
 import {
   generateJobId,
+  getConfig,
   listJobs,
   readJobFile,
   resolveJobFile,
   resolveJobLogFile,
+  setConfig,
   upsertJob,
   writeJobFile
 } from "./lib/state.mjs";
+import { ensureGitRepository } from "./lib/git.mjs";
 
 const PLUGIN_ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -44,7 +60,8 @@ function printUsage() {
       '  node scripts/agy-companion.mjs task "[--model <name>] [--timeout <dur>] [--resume | --conversation <id>] <prompt>"',
       '  node scripts/agy-companion.mjs status "[job-id] [--all]"',
       '  node scripts/agy-companion.mjs result "[job-id]"',
-      '  node scripts/agy-companion.mjs cancel "[job-id]"'
+      '  node scripts/agy-companion.mjs cancel "[job-id]"',
+      '  node scripts/agy-companion.mjs setup "[--enable-review-gate|--disable-review-gate]"'
     ].join("\n")
   );
 }
@@ -243,6 +260,36 @@ function runResult(rawArgs) {
   return job.status === "failed" ? 1 : 0;
 }
 
+function runSetup(rawArgs) {
+  const { flags } = parseArgs(splitRawArgumentString(rawArgs));
+  const workspaceRoot = resolveWorkspaceRoot(process.cwd());
+
+  if (flags["enable-review-gate"]) {
+    setConfig(workspaceRoot, "stopReviewGate", true);
+  }
+  if (flags["disable-review-gate"]) {
+    setConfig(workspaceRoot, "stopReviewGate", false);
+  }
+
+  let inGitRepo = true;
+  try {
+    ensureGitRepository(workspaceRoot);
+  } catch {
+    inGitRepo = false;
+  }
+
+  console.log(
+    renderSetupReport({
+      agyAvailable: checkAgyAvailable(),
+      nodeVersion: process.version,
+      inGitRepo,
+      workspaceRoot,
+      stopReviewGate: Boolean(getConfig(workspaceRoot).stopReviewGate)
+    })
+  );
+  return 0;
+}
+
 function runCancel(rawArgs) {
   const { text } = parseArgs(splitRawArgumentString(rawArgs));
   const reference = text.split(/\s+/).filter(Boolean)[0] ?? null;
@@ -282,6 +329,9 @@ async function main() {
         return;
       case "cancel":
         process.exitCode = runCancel(rawArgs);
+        return;
+      case "setup":
+        process.exitCode = runSetup(rawArgs);
         return;
       default:
         printUsage();

@@ -11,6 +11,11 @@ function argValue(flag) {
   return index !== -1 && index + 1 < process.argv.length ? process.argv[index + 1] : null;
 }
 
+if (process.argv.includes("--help")) {
+  console.log("Usage of fake-agy");
+  process.exit(0);
+}
+
 if (process.env.FAKE_AGY_ARGS_FILE) {
   fs.writeFileSync(process.env.FAKE_AGY_ARGS_FILE, JSON.stringify(process.argv.slice(2)), "utf8");
 }

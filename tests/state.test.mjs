@@ -6,10 +6,12 @@ import { test } from "node:test";
 
 import {
   generateJobId,
+  getConfig,
   listJobs,
   loadState,
   resolveJobFile,
   resolveStateDir,
+  setConfig,
   upsertJob,
   writeJobFile,
   readJobFile,
@@ -80,6 +82,19 @@ test("writeJobFile round-trips payloads", () => {
     const cwd = process.cwd();
     const file = writeJobFile(cwd, "task-x", { output: "## Verdict\napprove" });
     assert.deepEqual(readJobFile(file), { output: "## Verdict\napprove" });
+  });
+});
+
+test("config round-trips and survives job updates", () => {
+  withTempStateRoot(() => {
+    const cwd = process.cwd();
+    assert.equal(getConfig(cwd).stopReviewGate, false);
+    setConfig(cwd, "stopReviewGate", true);
+    assert.equal(getConfig(cwd).stopReviewGate, true);
+    upsertJob(cwd, { id: "task-cfg", kind: "task", status: "completed" });
+    assert.equal(getConfig(cwd).stopReviewGate, true);
+    setConfig(cwd, "stopReviewGate", false);
+    assert.equal(getConfig(cwd).stopReviewGate, false);
   });
 });
 

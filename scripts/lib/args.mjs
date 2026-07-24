@@ -1,4 +1,4 @@
-const BOOLEAN_FLAGS = new Set(["background", "wait", "all", "json", "resume"]);
+const BOOLEAN_FLAGS = new Set(["background", "wait", "all", "json", "resume", "enable-review-gate", "disable-review-gate"]);
 const VALUE_FLAGS = new Set(["base", "scope", "model", "timeout", "conversation"]);
 
 export function splitRawArgumentString(raw) {

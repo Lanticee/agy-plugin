@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 export const DEFAULT_MODEL = "Gemini 3.6 Flash (Medium)";
 export const DEFAULT_PRINT_TIMEOUT = "10m";
@@ -25,6 +25,21 @@ function resolveAgyCommand() {
   }
   // Plain "agy" works on Windows too: CreateProcess resolves it to agy.exe.
   return { bin: "agy", prefix: [] };
+}
+
+export function checkAgyAvailable() {
+  const { bin, prefix } = resolveAgyCommand();
+  try {
+    const result = spawnSync(bin, [...prefix, "--help"], {
+      stdio: "ignore",
+      windowsHide: true,
+      timeout: 15000,
+      shell: false
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 export function killProcessTree(pid) {

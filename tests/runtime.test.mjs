@@ -195,6 +195,27 @@ test("review jobs also record a conversation id", async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("setup reports environment and toggles the review gate", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const report = runCompanion(repo, dataDir, ["setup", ""]);
+  assert.equal(report.status, 0, report.stderr);
+  assert.match(report.stdout, /agy binary/i);
+  assert.match(report.stdout, /review gate: off/i);
+
+  const enable = runCompanion(repo, dataDir, ["setup", "--enable-review-gate"]);
+  assert.equal(enable.status, 0, enable.stderr);
+  assert.match(enable.stdout, /review gate: on/i);
+
+  const disable = runCompanion(repo, dataDir, ["setup", "--disable-review-gate"]);
+  assert.equal(disable.status, 0, disable.stderr);
+  assert.match(disable.stdout, /review gate: off/i);
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("cancel kills a running job and the runner does not overwrite the cancelled state", async () => {
   const repo = makeRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));

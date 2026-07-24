@@ -17,7 +17,7 @@ function nowIso() {
 }
 
 function defaultState() {
-  return { version: STATE_VERSION, jobs: [] };
+  return { version: STATE_VERSION, config: { stopReviewGate: false }, jobs: [] };
 }
 
 export function resolveStateDir(cwd) {
@@ -60,6 +60,7 @@ export function loadState(cwd) {
     return {
       ...defaultState(),
       ...parsed,
+      config: { ...defaultState().config, ...(parsed.config ?? {}) },
       jobs: Array.isArray(parsed.jobs) ? parsed.jobs : []
     };
   } catch {
@@ -83,7 +84,11 @@ export function saveState(cwd, state) {
   const previousJobs = loadState(cwd).jobs;
   ensureStateDir(cwd);
   const nextJobs = pruneJobs(state.jobs ?? []);
-  const nextState = { version: STATE_VERSION, jobs: nextJobs };
+  const nextState = {
+    version: STATE_VERSION,
+    config: { ...defaultState().config, ...(state.config ?? {}) },
+    jobs: nextJobs
+  };
 
   const retainedIds = new Set(nextJobs.map((job) => job.id));
   for (const job of previousJobs) {
@@ -133,6 +138,16 @@ export function upsertJob(cwd, jobPatch) {
 
 export function listJobs(cwd) {
   return loadState(cwd).jobs;
+}
+
+export function getConfig(cwd) {
+  return loadState(cwd).config;
+}
+
+export function setConfig(cwd, key, value) {
+  return updateState(cwd, (state) => {
+    state.config = { ...state.config, [key]: value };
+  });
 }
 
 export function writeJobFile(cwd, jobId, payload) {

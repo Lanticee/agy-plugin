@@ -58,6 +58,22 @@ export function renderJobResult(job, payload) {
   return lines.join("\n");
 }
 
+export function renderSetupReport(report) {
+  const lines = [
+    `- agy binary: ${report.agyAvailable ? "found" : "NOT FOUND — install from https://antigravity.google and run agy once to sign in"}`,
+    `- node: ${report.nodeVersion}`,
+    `- git repository: ${report.inGitRepo ? report.workspaceRoot : "not a git repo (review commands need one)"}`,
+    `- review gate: ${report.stopReviewGate ? "on" : "off"}`
+  ];
+  lines.push(
+    "",
+    report.stopReviewGate
+      ? "The Stop hook will run a Gemini review of your dirty working tree each time Claude finishes a turn, and block completion on needs-attention findings. Disable with `/agy-cli:setup --disable-review-gate`."
+      : "Enable the optional stop-time review gate with `/agy-cli:setup --enable-review-gate` (runs a Gemini review each time Claude stops; can consume quota quickly)."
+  );
+  return lines.join("\n");
+}
+
 export function renderCancelReport(job) {
   return `Cancelled job ${job.id} (${job.kind ?? "job"}, was running since ${job.startedAt ?? job.createdAt}).`;
 }
