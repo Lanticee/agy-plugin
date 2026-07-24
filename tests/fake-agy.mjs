@@ -1,8 +1,28 @@
 #!/usr/bin/env node
-// Stand-in for the agy binary in tests. Ignores its arguments except --print.
+// Stand-in for the agy binary in tests.
+import fs from "node:fs";
+
 const sleepMs = Number(process.env.FAKE_AGY_SLEEP_MS ?? 0);
 const exitCode = Number(process.env.FAKE_AGY_EXIT ?? 0);
 const hasPrint = process.argv.includes("--print");
+
+function argValue(flag) {
+  const index = process.argv.indexOf(flag);
+  return index !== -1 && index + 1 < process.argv.length ? process.argv[index + 1] : null;
+}
+
+if (process.env.FAKE_AGY_ARGS_FILE) {
+  fs.writeFileSync(process.env.FAKE_AGY_ARGS_FILE, JSON.stringify(process.argv.slice(2)), "utf8");
+}
+
+const logFile = argValue("--log-file");
+if (logFile) {
+  const conversationId = argValue("--conversation") ?? "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const line = argValue("--conversation")
+    ? `I0724 00:00:00.000000 1 printmode.go:108] Print mode: starting (promptLength=1, model="fake", conversationID="${conversationId}")\n`
+    : `I0724 00:00:00.000000 1 server.go:917] Created conversation ${conversationId}\n`;
+  fs.writeFileSync(logFile, line, "utf8");
+}
 
 setTimeout(() => {
   if (!hasPrint) {

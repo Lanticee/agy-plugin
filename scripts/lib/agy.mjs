@@ -42,7 +42,27 @@ export function killProcessTree(pid) {
   }
 }
 
-export function runAgy({ prompt, addDir, addDirs, model = DEFAULT_MODEL, printTimeout = DEFAULT_PRINT_TIMEOUT, killGraceMs = 60000, onSpawn }) {
+export function extractConversationId(logText) {
+  const text = String(logText ?? "");
+  const created = /Created conversation ([0-9a-f-]{36})/.exec(text);
+  if (created) {
+    return created[1];
+  }
+  const printMode = /conversationID="([0-9a-f-]{36})"/.exec(text);
+  return printMode ? printMode[1] : null;
+}
+
+export function runAgy({
+  prompt,
+  addDir,
+  addDirs,
+  model = DEFAULT_MODEL,
+  printTimeout = DEFAULT_PRINT_TIMEOUT,
+  killGraceMs = 60000,
+  logFile,
+  conversationId,
+  onSpawn
+}) {
   const { bin, prefix } = resolveAgyCommand();
   const dirs = addDirs ?? (addDir ? [addDir] : []);
   const args = [
@@ -50,6 +70,8 @@ export function runAgy({ prompt, addDir, addDirs, model = DEFAULT_MODEL, printTi
     "--print",
     prompt,
     ...dirs.flatMap((dir) => ["--add-dir", dir]),
+    ...(logFile ? ["--log-file", logFile] : []),
+    ...(conversationId ? ["--conversation", conversationId] : []),
     "--mode",
     "plan",
     "--model",
