@@ -26,6 +26,11 @@ async function readStdin() {
 }
 
 function extractVerdict(reviewOutput) {
+  // Preferred: the machine-readable line the templates demand as the final line.
+  const machine = /^\s*VERDICT:\s*(approve|needs-attention)\s*$/im.exec(String(reviewOutput ?? ""));
+  if (machine) {
+    return machine[1].toLowerCase();
+  }
   const lines = String(reviewOutput ?? "").split(/\r?\n/);
   const verdictIndex = lines.findIndex((line) => line.trim().toLowerCase() === "## verdict");
   if (verdictIndex === -1) {

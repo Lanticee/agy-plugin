@@ -35,6 +35,10 @@ For each finding (omit the section entirely if there are none):
 
 Severity scale: P0 = must fix before ship, P1 = should fix, P2 = worth fixing, P3 = optional.
 Prefer one strong finding over several weak ones. If the change looks safe, say so directly and return no findings.
+
+End your entire response with exactly one of these two lines, verbatim, with no formatting or backticks:
+VERDICT: approve
+VERDICT: needs-attention
 </output_contract>
 
 <grounding_rules>

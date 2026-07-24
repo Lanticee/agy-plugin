@@ -38,6 +38,9 @@ setTimeout(() => {
     const verdict = process.env.FAKE_AGY_VERDICT ?? "approve";
     console.log("## Verdict");
     console.log(`${verdict} - fake review verdict.`);
+    if (process.env.FAKE_AGY_MACHINE_VERDICT === "1") {
+      console.log(`VERDICT: ${verdict.replace(/[^a-z-]/gi, "")}`);
+    }
   } else {
     console.error("fake-agy: simulated failure");
   }

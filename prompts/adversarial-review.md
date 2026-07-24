@@ -57,6 +57,10 @@ For each finding (omit the section entirely if there are none):
 - **Failure scenario:** <concrete inputs/state that trigger it and the impact>
 - **Fix:** <concrete recommendation>
 - **Confidence:** <0.0–1.0>
+
+End your entire response with exactly one of these two lines, verbatim, with no formatting or backticks:
+VERDICT: approve
+VERDICT: needs-attention
 </output_contract>
 
 <grounding_rules>
