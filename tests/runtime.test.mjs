@@ -118,6 +118,22 @@ test("pre-split argv keeps multi-word flag values intact", async () => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("exit 0 with empty output is recorded as failed, not empty success", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const review = runCompanion(repo, dataDir, ["review", ""], { FAKE_AGY_EMPTY: "1" });
+  assert.notEqual(review.status, 0);
+  assert.match(review.stdout, /no output/i);
+  assert.match(review.stdout, /command.*permission/i);
+
+  const jobs = await loadJobs(repo, dataDir);
+  assert.equal(jobs[0].status, "failed");
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("failed agy runs are recorded as failed and surface stderr", async () => {
   const repo = makeRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));

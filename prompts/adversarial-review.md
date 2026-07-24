@@ -33,6 +33,7 @@ Look for violated invariants, missing guards, unhandled failure paths, and assum
 Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the code.
 If the user supplied a focus area, weight it heavily, but still report any other material issue you can defend.
 When a hunk's correctness depends on surrounding code, open the affected file with your read tools and check the real context.
+Terminal/command tools are unavailable in this environment (permission prompts are auto-denied) — do not attempt to run commands; rely on the provided context and your file-read tools only.
 {{COLLECTION_GUIDANCE}}
 </review_method>
 

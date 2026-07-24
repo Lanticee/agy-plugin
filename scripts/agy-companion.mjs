@@ -52,7 +52,7 @@ const INLINE_GUIDANCE = "Use the repository context below as primary evidence.";
 const SELF_COLLECT_GUIDANCE =
   "The repository context below is a lightweight summary. Open the listed changed files with your read tools and inspect them before finalizing findings.";
 const TASK_PREAMBLE =
-  "You are assisting from a non-interactive CLI. You may read files in the added directories with your read-only tools, but you cannot edit files or run commands. If the task would require edits, describe the exact changes instead of attempting them.";
+  "You are assisting from a non-interactive CLI. You may read files in the added directories with your read-only tools, but you cannot edit files or run terminal commands (those permission prompts are auto-denied — do not attempt them). If the task would require edits or command execution, describe the exact changes or commands instead of attempting them.";
 
 function printUsage() {
   console.log(
@@ -160,6 +160,18 @@ async function executeJob({ workspaceRoot, jobId, kind, prompt, model, printTime
   const completedAt = new Date().toISOString();
   const recordedConversationId = readConversationId(agyLogFile) ?? conversationId ?? undefined;
   writeJobFile(workspaceRoot, jobId, { output: result.stdout, stderr: result.stderr, exitStatus: result.status });
+
+  // agy can exit 0 with no output at all (e.g. a tool permission was
+  // auto-denied and it gave up) — that is a failure, not an empty success.
+  if (result.status === 0 && !result.stdout.trim()) {
+    const note = result.stderr.trim() || "agy produced no output";
+    upsertJob(workspaceRoot, { id: jobId, status: "failed", completedAt, summary: note.slice(0, 200), conversationId: recordedConversationId });
+    appendLog(logFile, `failed: empty output — ${note.slice(0, 200)}`);
+    const job = currentJob(workspaceRoot, jobId);
+    console.log(`${renderJobHeader(job)}\n`);
+    console.log(`agy produced no output.\n\n${note}`);
+    return 1;
+  }
 
   if (result.status === 0) {
     const summary = extractSummary(result.stdout);

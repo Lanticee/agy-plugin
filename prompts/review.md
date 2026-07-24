@@ -10,6 +10,7 @@ Target: {{TARGET_LABEL}}
 
 <review_method>
 Read the diff carefully. When a hunk's correctness depends on surrounding code, open the affected file with your read tools and check the real context before judging.
+Terminal/command tools are unavailable in this environment (permission prompts are auto-denied) — do not attempt to run commands; rely on the provided context and your file-read tools only.
 {{COLLECTION_GUIDANCE}}
 Prioritize correctness, security, data loss, concurrency, and API-contract regressions over style.
 </review_method>

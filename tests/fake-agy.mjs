@@ -34,6 +34,10 @@ setTimeout(() => {
     console.error("fake-agy: expected --print");
     process.exit(2);
   }
+  if (process.env.FAKE_AGY_EMPTY === "1") {
+    console.error("jetski: no output produced — a tool required the \"command\" permission");
+    process.exit(0);
+  }
   if (exitCode === 0) {
     const verdict = process.env.FAKE_AGY_VERDICT ?? "approve";
     console.log("## Verdict");

@@ -100,9 +100,12 @@ Reviews run through a Node.js companion runtime (`scripts/agy-companion.mjs`, re
 ```
 /agy-cli:review --background
 /agy-cli:status
+/agy-cli:status --wait
 /agy-cli:result
 /agy-cli:cancel
 ```
+
+`status` shows a live phase for running jobs (`starting` / `generating` / `finalizing`, read from agy's own log) and automatically marks jobs whose process died as failed. `status --wait [--timeout-ms <ms>]` blocks until the job finishes and prints its result (default timeout 240s). Review outputs end with a machine-readable `VERDICT:` line, which the review gate and scripts can parse reliably. See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 **Task delegation with memory:**
 

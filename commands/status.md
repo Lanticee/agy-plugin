@@ -1,6 +1,6 @@
 ---
-description: Show running and recent agy review jobs for this repository
-argument-hint: '[job-id] [--all]'
+description: Show running and recent agy jobs for this repository, or wait for one to finish
+argument-hint: '[job-id] [--all] [--wait] [--timeout-ms <ms>]'
 disable-model-invocation: true
 allowed-tools: Bash(node:*)
 ---
