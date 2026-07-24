@@ -7,6 +7,8 @@ A [Claude Code](https://claude.com/claude-code) plugin that lets Claude collabor
 ## Features
 
 - **`/agy` slash command** — manually send any prompt to Gemini 3.6 Flash (`/agy review src/foo.ts for concurrency bugs`)
+- **`/agy-cli:review`** — Gemini code review of your working tree or branch (`--base main`), same read-only guarantees
+- **`/agy-cli:adversarial-review`** — steerable challenge review that questions the design; takes focus text (`/agy-cli:adversarial-review --base main look for race conditions`)
 - **`gemini-flash` subagent** — Claude automatically delegates self-contained subtasks (reviews, analysis, second opinions) to Gemini during coding and brings the results back
 - **Model override** — defaults to `Gemini 3.6 Flash (Medium)`; ask for any model `agy models` supports
 - Works in Claude Code's sandboxed shell — no special permissions needed beyond running `agy`
@@ -82,6 +84,16 @@ claude --plugin-dir /path/to/agy-plugin
 
 Claude will delegate to the `gemini-flash` subagent and report Gemini's answer back, clearly attributed.
 
+**Code review:**
+
+```
+/agy-cli:review
+/agy-cli:review --base main
+/agy-cli:adversarial-review challenge the caching design
+```
+
+Both commands collect your git diff, send it to Gemini through `agy --print --mode plan` (read-only), and return the review verbatim. Nothing is modified.
+
 **Fewer permission prompts** — add to your project's `.claude/settings.json`:
 
 ```json
@@ -101,6 +113,12 @@ agy-plugin/
 │   └── marketplace.json     # marketplace definition (install via `claude plugin marketplace add`)
 ├── agents/
 │   └── gemini-flash.md      # subagent: delegate subtasks to Gemini 3.6 Flash
+├── commands/
+│   ├── review.md            # /agy-cli:review — Gemini code review of git state
+│   └── adversarial-review.md# /agy-cli:adversarial-review — steerable challenge review
+├── prompts/
+│   ├── review.md            # review prompt template
+│   └── adversarial-review.md# adversarial review prompt template
 ├── skills/
 │   └── agy/
 │       └── SKILL.md         # /agy slash command
