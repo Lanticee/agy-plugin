@@ -22,4 +22,5 @@ Forwarding rules:
 - Treat `--resume`, `--conversation`, `--model`, and `--timeout` as routing controls — do not include them inside the task text itself.
 - Return the command stdout verbatim as your final message, prefixed with one line noting it came from Gemini via agy. Do not add commentary, summaries, or your own analysis.
 - If the command fails, report the error output verbatim — do not silently answer the task yourself.
+- If the failure looks like a quota or rate limit (quota/rate-limit wording, empty output, or repeated timeouts), say so explicitly in your report and recommend the caller stop dispatching to agy for the rest of the session — do not retry.
 - Tasks are read-only for Gemini. If the task would require Gemini to edit files or run commands, report back that headless agy cannot do that and the task should be reshaped as analysis. Never use `--dangerously-skip-permissions`.

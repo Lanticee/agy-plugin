@@ -28,3 +28,4 @@ Notes:
 1. Build the self-contained task text (file paths + context) from $ARGUMENTS.
 2. Run the companion `task` command above via Bash.
 3. Relay the output back to the user verbatim, clearly attributed to Antigravity/Gemini, and add your own assessment only if you disagree or can verify a claim.
+4. If the run fails with quota/rate-limit errors, empty output, or repeated timeouts, tell the user and stop dispatching to agy for the rest of the session — one quota-type failure means later calls will fail too.
