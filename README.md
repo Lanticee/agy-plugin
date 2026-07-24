@@ -9,7 +9,8 @@ A [Claude Code](https://claude.com/claude-code) plugin that lets Claude collabor
 - **`/agy` slash command** — manually send any prompt to Gemini 3.6 Flash (`/agy review src/foo.ts for concurrency bugs`)
 - **`/agy-cli:review`** — Gemini code review of your working tree or branch (`--base main`), same read-only guarantees; supports `--wait`/`--background`
 - **`/agy-cli:adversarial-review`** — steerable challenge review that questions the design; takes focus text (`/agy-cli:adversarial-review --base main look for race conditions`)
-- **`/agy-cli:status` / `/agy-cli:result` / `/agy-cli:cancel`** — track, read back, and stop background review jobs (per-repo job state)
+- **`/agy-cli:task`** — delegate any prompt to Gemini as a tracked job; `--resume` continues the previous Gemini conversation in this repo
+- **`/agy-cli:status` / `/agy-cli:result` / `/agy-cli:cancel`** — track, read back, and stop background jobs (per-repo job state); results include the conversation ID for `agy --conversation <id> -i`
 - **`gemini-flash` subagent** — Claude automatically delegates self-contained subtasks (reviews, analysis, second opinions) to Gemini during coding and brings the results back
 - **Model override** — defaults to `Gemini 3.6 Flash (Medium)`; ask for any model `agy models` supports
 - Works in Claude Code's sandboxed shell — no special permissions needed beyond running `agy`
@@ -104,6 +105,15 @@ Reviews run through a Node.js companion runtime (`scripts/agy-companion.mjs`, re
 /agy-cli:cancel
 ```
 
+**Task delegation with memory:**
+
+```
+/agy-cli:task summarize the error handling in src/server.ts
+/agy-cli:task --resume now compare it with src/client.ts
+```
+
+Every run records its agy conversation ID, so `--resume` continues where Gemini left off, and `/agy-cli:result` prints an `agy --conversation <id> -i` command to pick the thread up interactively in agy itself.
+
 **Fewer permission prompts** — add to your project's `.claude/settings.json`:
 
 ```json
@@ -126,6 +136,7 @@ agy-plugin/
 ├── commands/
 │   ├── review.md            # /agy-cli:review — Gemini code review of git state
 │   ├── adversarial-review.md# /agy-cli:adversarial-review — steerable challenge review
+│   ├── task.md              # /agy-cli:task — delegate a prompt to Gemini (resumable)
 │   ├── status.md            # /agy-cli:status — list running/recent review jobs
 │   ├── result.md            # /agy-cli:result — stored output of a finished job
 │   └── cancel.md            # /agy-cli:cancel — stop a running background job
