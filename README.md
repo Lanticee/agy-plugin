@@ -11,6 +11,7 @@ A [Claude Code](https://claude.com/claude-code) plugin that lets Claude collabor
 - **`/agy-cli:adversarial-review`** — steerable challenge review that questions the design; takes focus text (`/agy-cli:adversarial-review --base main look for race conditions`)
 - **`/agy-cli:task`** — delegate any prompt to Gemini as a tracked job; `--resume` continues the previous Gemini conversation in this repo
 - **`/agy-cli:status` / `/agy-cli:result` / `/agy-cli:cancel`** — track, read back, and stop background jobs (per-repo job state); results include the conversation ID for `agy --conversation <id> -i`
+- **`/agy-cli:setup`** — environment health check, plus an opt-in stop-time review gate (`--enable-review-gate`): Gemini reviews your dirty working tree each time Claude finishes and blocks completion on material findings
 - **`gemini-flash` subagent** — Claude automatically delegates self-contained subtasks (reviews, analysis, second opinions) to Gemini during coding and brings the results back
 - **Model override** — defaults to `Gemini 3.6 Flash (Medium)`; ask for any model `agy models` supports
 - Works in Claude Code's sandboxed shell — no special permissions needed beyond running `agy`
@@ -114,6 +115,15 @@ Reviews run through a Node.js companion runtime (`scripts/agy-companion.mjs`, re
 
 Every run records its agy conversation ID, so `--resume` continues where Gemini left off, and `/agy-cli:result` prints an `agy --conversation <id> -i` command to pick the thread up interactively in agy itself.
 
+**Review gate (optional, off by default):**
+
+```
+/agy-cli:setup --enable-review-gate
+/agy-cli:setup --disable-review-gate
+```
+
+When enabled, a `Stop` hook runs a Gemini review of your dirty working tree each time Claude finishes a turn; a `needs-attention` verdict blocks the stop so Claude addresses the findings first. It fails open (any error lets the session continue), and skips when the tree is clean. Like the Codex plugin's equivalent, it can create long Claude/Gemini loops and drain quota — enable it only while actively monitoring the session.
+
 **Fewer permission prompts** — add to your project's `.claude/settings.json`:
 
 ```json
@@ -134,6 +144,7 @@ agy-plugin/
 ├── agents/
 │   └── gemini-flash.md      # subagent: delegate subtasks to Gemini 3.6 Flash
 ├── commands/
+│   ├── setup.md             # /agy-cli:setup — env doctor + review-gate toggle
 │   ├── review.md            # /agy-cli:review — Gemini code review of git state
 │   ├── adversarial-review.md# /agy-cli:adversarial-review — steerable challenge review
 │   ├── task.md              # /agy-cli:task — delegate a prompt to Gemini (resumable)
