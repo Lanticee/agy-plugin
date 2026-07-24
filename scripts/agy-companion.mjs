@@ -118,16 +118,25 @@ async function runReviewJob(kind, rawArgs) {
   appendLog(logFile, `job ${jobId} started: ${kind}, ${target.label}, model ${model}`);
   appendLog(logFile, context.summary);
 
-  const result = await runAgy({
-    prompt: pointerPrompt,
-    addDirs: [workspaceRoot, path.dirname(promptFile)],
-    model,
-    printTimeout,
-    onSpawn: (child) => {
-      upsertJob(workspaceRoot, { id: jobId, agyPid: child.pid });
-      appendLog(logFile, `agy started (pid ${child.pid})`);
-    }
-  });
+  let result;
+  try {
+    result = await runAgy({
+      prompt: pointerPrompt,
+      addDirs: [workspaceRoot, path.dirname(promptFile)],
+      model,
+      printTimeout,
+      onSpawn: (child) => {
+        upsertJob(workspaceRoot, { id: jobId, agyPid: child.pid });
+        appendLog(logFile, `agy started (pid ${child.pid})`);
+      }
+    });
+  } catch (error) {
+    // A synchronous spawn failure must not leave the job stuck in "running".
+    const message = error instanceof Error ? error.message : String(error);
+    upsertJob(workspaceRoot, { id: jobId, status: "failed", completedAt: new Date().toISOString(), summary: message });
+    appendLog(logFile, `failed to spawn agy: ${message}`);
+    throw error;
+  }
 
   const latest = currentJob(workspaceRoot, jobId);
   if (latest?.status === "cancelled") {
