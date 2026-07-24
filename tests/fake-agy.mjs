@@ -35,8 +35,9 @@ setTimeout(() => {
     process.exit(2);
   }
   if (exitCode === 0) {
+    const verdict = process.env.FAKE_AGY_VERDICT ?? "approve";
     console.log("## Verdict");
-    console.log("approve - fake review found nothing material.");
+    console.log(`${verdict} - fake review verdict.`);
   } else {
     console.error("fake-agy: simulated failure");
   }
