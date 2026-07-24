@@ -177,6 +177,7 @@ export async function waitForJob(cwd, reference, options = {}) {
   }
 
   while (true) {
+    reapOrphanJobs(workspaceRoot);
     const current = sortJobsNewestFirst(listJobs(workspaceRoot)).find((job) => job.id === target.id) ?? target;
     if (current.status !== "running") {
       return { job: current, timedOut: false };

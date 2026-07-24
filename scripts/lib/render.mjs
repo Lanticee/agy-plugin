@@ -39,7 +39,7 @@ export function renderJobHeader(job) {
 export function renderJobResult(job, payload) {
   const lines = [renderJobHeader(job), ""];
   if (job.status === "failed") {
-    lines.push(`Job failed (exit ${payload?.exitStatus ?? "unknown"}).`);
+    lines.push(`Job failed (exit ${payload?.exitStatus ?? "unknown"})${job.summary ? `: ${job.summary}` : "."}`);
     if (payload?.stderr?.trim()) {
       lines.push("", "stderr:", "```", payload.stderr.trim(), "```");
     }

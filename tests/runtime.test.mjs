@@ -240,6 +240,33 @@ test("status --wait blocks until a background job finishes and prints its result
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test("status --wait returns immediately when the waited job's process is dead", async () => {
+  const repo = makeRepo();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
+
+  const previous = process.env.CLAUDE_PLUGIN_DATA;
+  process.env.CLAUDE_PLUGIN_DATA = dataDir;
+  try {
+    const { upsertJob } = await import("../scripts/lib/state.mjs");
+    upsertJob(repo, { id: "task-ghost", kind: "task", status: "running", pid: 4000000 });
+  } finally {
+    if (previous === undefined) {
+      delete process.env.CLAUDE_PLUGIN_DATA;
+    } else {
+      process.env.CLAUDE_PLUGIN_DATA = previous;
+    }
+  }
+
+  const start = Date.now();
+  const wait = runCompanion(repo, dataDir, ["status", "task-ghost --wait --timeout-ms 60000"]);
+  assert.ok(Date.now() - start < 30000, "wait should return well before the timeout");
+  assert.equal(wait.status, 1, wait.stderr);
+  assert.match(wait.stdout, /orphaned/i);
+
+  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 test("setup reports environment and toggles the review gate", async () => {
   const repo = makeRepo();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-data-"));
